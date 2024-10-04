@@ -1,13 +1,17 @@
 use criterion::{black_box, Criterion};
 use jsonpath::Selector;
-use jsonpath_rs::json_path::{DummyTrackerGenerator, PathCalculator, Query};
+use jsonpath_rs::json_path::{self, Query};
 use serde_json::Value;
-use std::str::FromStr;
+
+const QUERY: &str = "sand.now.seeing.pound.method.motor.breathing.action.huge.relationship.fun.grade.express.music.which.everyone.fix.white.attached.break.bad.electricity.tail.title.prize.itself.completely.stared.lunch.particularly.plates.held.silver.seen.trail.cage.empty.from.sleep.lake.control.grain.changing.whispered.home.drove.add.widely.current.rubbed.whale.beneath.trail.explore.foot.salt.brought.drink.worth.dozen.solution.copper.moving.swing.neighbor.your.suit.were.harbor.forest.strike.favorite.start.concerned.draw.smallest.single.statement.favorite.stood.mill.freedom.basis.carry.naturally.parts.out.major.visit.appearance.sit.becoming.party.object.its.track.space.facing.experience";
 
 fn create_json() -> Value {
     let json = include_str!("./data.json");
-
     serde_json::from_str(json).unwrap()
+}
+
+fn query() -> String {
+    format!("$.{}", QUERY)
 }
 
 trait Path {
@@ -15,19 +19,21 @@ trait Path {
 }
 
 struct JsonPathRs<'a> {
-    path: PathCalculator<'a, DummyTrackerGenerator>,
+    query: Query<'a>,
 }
 
 impl<'a> JsonPathRs<'a> {
-    fn new(query: &'a Query) -> Self {
-        let path = jsonpath_rs::create(query);
-        Self { path }
+    fn new(query: Query<'a>) -> Self {
+        Self { query }
     }
 }
 
 impl Path for JsonPathRs<'_> {
     fn get_path<'a>(&self, value: &'a Value) -> Option<&'a Value> {
-        self.path.calc(value).first().map(|v| *v)
+        jsonpath_rs::create(&self.query)
+            .calc(value)
+            .first()
+            .map(|v| *v)
     }
 }
 
@@ -35,11 +41,9 @@ struct Handwritten {
     path: Vec<String>,
 }
 
-impl Default for Handwritten {
-    fn default() -> Self {
-        Handwritten {
-            path: "sand.now.seeing.pound.method.motor.breathing.action.huge.relationship.fun.grade.express.music.which.everyone.fix.white.attached.break.bad.electricity.tail.title.prize.itself.completely.stared.lunch.particularly.plates.held.silver.seen.trail.cage.empty.from.sleep.lake.control.grain.changing.whispered.home.drove.add.widely.current.rubbed.whale.beneath.trail.explore.foot.salt.brought.drink.worth.dozen.solution.copper.moving.swing.neighbor.your.suit.were.harbor.forest.strike.favorite.start.concerned.draw.smallest.single.statement.favorite.stood.mill.freedom.basis.carry.naturally.parts.out.major.visit.appearance.sit.becoming.party.object.its.track.space.facing.experience".trim().split(".").map(|a| a.trim().to_owned()).collect::<Vec<_>>(),
-        }
+impl Handwritten {
+    fn new(path: Vec<String>) -> Self {
+        Handwritten { path }
     }
 }
 
@@ -60,9 +64,9 @@ struct JsonPath {
     expr: Selector,
 }
 
-impl Default for JsonPath {
-    fn default() -> Self {
-        let selector = Selector::new("$.sand.now.seeing.pound.method.motor.breathing.action.huge.relationship.fun.grade.express.music.which.everyone.fix.white.attached.break.bad.electricity.tail.title.prize.itself.completely.stared.lunch.particularly.plates.held.silver.seen.trail.cage.empty.from.sleep.lake.control.grain.changing.whispered.home.drove.add.widely.current.rubbed.whale.beneath.trail.explore.foot.salt.brought.drink.worth.dozen.solution.copper.moving.swing.neighbor.your.suit.were.harbor.forest.strike.favorite.start.concerned.draw.smallest.single.statement.favorite.stood.mill.freedom.basis.carry.naturally.parts.out.major.visit.appearance.sit.becoming.party.object.its.track.space.facing.experience").unwrap();
+impl JsonPath {
+    fn new(query: String) -> Self {
+        let selector = Selector::new(query.as_str()).unwrap();
         Self { expr: selector }
     }
 }
@@ -78,10 +82,10 @@ struct SerdeJsonPath {
     expr: serde_json_path::JsonPath,
 }
 
-impl Default for SerdeJsonPath {
-    fn default() -> Self {
+impl SerdeJsonPath {
+    fn new(query: String) -> Self {
         SerdeJsonPath {
-            expr: serde_json_path::JsonPath::parse("$.sand.now.seeing.pound.method.motor.breathing.action.huge.relationship.fun.grade.express.music.which.everyone.fix.white.attached.break.bad.electricity.tail.title.prize.itself.completely.stared.lunch.particularly.plates.held.silver.seen.trail.cage.empty.from.sleep.lake.control.grain.changing.whispered.home.drove.add.widely.current.rubbed.whale.beneath.trail.explore.foot.salt.brought.drink.worth.dozen.solution.copper.moving.swing.neighbor.your.suit.were.harbor.forest.strike.favorite.start.concerned.draw.smallest.single.statement.favorite.stood.mill.freedom.basis.carry.naturally.parts.out.major.visit.appearance.sit.becoming.party.object.its.track.space.facing.experience").unwrap(),
+            expr: serde_json_path::JsonPath::parse(query.as_str()).unwrap(),
         }
     }
 }
@@ -95,31 +99,27 @@ impl Path for SerdeJsonPath {
 pub fn criterion_benchmark(c: &mut Criterion) {
     let value = create_json();
 
-    let hw = Handwritten::default();
-    let jp = JsonPath::default();
-    let jp_serde = SerdeJsonPath::default();
-    let jp_rs_selector = jsonpath_rs::compile("$.sand.now.seeing.pound.method.motor.breathing.action.huge.relationship.fun.grade.express.music.which.everyone.fix.white.attached.break.bad.electricity.tail.title.prize.itself.completely.stared.lunch.particularly.plates.held.silver.seen.trail.cage.empty.from.sleep.lake.control.grain.changing.whispered.home.drove.add.widely.current.rubbed.whale.beneath.trail.explore.foot.salt.brought.drink.worth.dozen.solution.copper.moving.swing.neighbor.your.suit.were.harbor.forest.strike.favorite.start.concerned.draw.smallest.single.statement.favorite.stood.mill.freedom.basis.carry.naturally.parts.out.major.visit.appearance.sit.becoming.party.object.its.track.space.facing.experience").unwrap();
-    let jp_rs = JsonPathRs::new(&jp_rs_selector);
+    let hand_written = Handwritten::new(
+        QUERY
+            .trim()
+            .split(".")
+            .map(|a| a.to_owned())
+            .collect::<Vec<_>>(),
+    );
+    let i1 = JsonPath::new(query());
+    let i2 = SerdeJsonPath::new(query());
+    let q = query();
+    let i3 = JsonPathRs::new(jsonpath_rs::compile(q.as_str()).unwrap());
 
-    assert_eq!(hw.get_path(&value), jp.get_path(&value));
-    assert_eq!(hw.get_path(&value), jp_serde.get_path(&value));
-    assert_eq!(hw.get_path(&value), jp_rs.get_path(&value));
-    c.bench_function("Hand Optimized", |b| {
-        b.iter(|| black_box(hw.get_path(&value)))
+    assert_eq!(hand_written.get_path(&value), i1.get_path(&value));
+    assert_eq!(hand_written.get_path(&value), i2.get_path(&value));
+    assert_eq!(hand_written.get_path(&value), i3.get_path(&value));
+    c.bench_function("HandWritten", |b| {
+        b.iter(|| black_box(hand_written.get_path(&value)))
     });
-    c.bench_function("JsonPath", |b| {
-        b.iter(|| black_box(jp_serde.get_path(&value)))
-    });
-
+    c.bench_function("JsonPath", |b| b.iter(|| black_box(i2.get_path(&value))));
     c.bench_function("SerdeJsonPath", |b| {
-        b.iter(|| black_box(jp_serde.get_path(&value)))
+        b.iter(|| black_box(i2.get_path(&value)))
     });
-
-    // c.bench_function("JsonPathRust", |b| {
-    //     b.iter(|| black_box(jp_rust.get_path(&value)))
-    // });
-
-    c.bench_function("JsonPathRs", |b| {
-        b.iter(|| black_box(jp_rs.get_path(&value)))
-    });
+    c.bench_function("JsonPathRs", |b| b.iter(|| black_box(i3.get_path(&value))));
 }
