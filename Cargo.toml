@@ -10,6 +10,12 @@ jsonpath = {version = "0.1.1", features = []}
 jsonpath-rust = {version = "0.7.1", features = []}
 jsonpath_rs = {version = "0.0.3", features = []}
 serde_json_path = {version = "0.6.7",features = []}
+jaq-core = "2.0.0-alpha.1"
+jaq-parse = "1.0.3"
+jaq-interpret = {version = "1.5.0", features = ["serde_json"]}
+jaq-std = "2.0.0-alpha.1"
+jaq-syn = "1.6.0"
+
 
 [dev-dependencies]
 criterion = "0.5.1"
